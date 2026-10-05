@@ -49,8 +49,8 @@ function createSphere(radius, segments, rings) {
             const y = radius * Math.cos(theta);
             const z = radius * Math.sin(theta) * Math.sin(phi);
 
-            // Move sphere up by 2 to sit atop the cube
-            positions.push(x, y + 2, z);
+            // all spheres believe themselves to be centered at the origin
+            positions.push(x, y, z);
 
             colors.push(
                 0.5 + 0.5 * x / radius,
@@ -80,66 +80,3 @@ function createSphere(radius, segments, rings) {
         indices: new Uint16Array(indices)
     };
 }
-
-// Create the sphere
-const sphere = createSphere(1, 32, 16);
-
-
-// Now add his hat
-function createCone(radius, height, segments) {
-    const conePositions = [];
-    const coneColors = [];
-    const coneIndices = [];
-
-    // Vertices
-    // Base center
-    conePositions.push(0, 3, 0);
-    coneColors.push(1, 0.5, 0);
-
-    // Base circle vertices
-    for (let i = 0; i < segments; i++) {
-        const angle = i * 2 * Math.PI / segments;
-
-        const x = radius * Math.cos(angle);
-        const z = radius * Math.sin(angle);
-
-        conePositions.push(x, 3, z);
-
-        coneColors.push(1, 0.5, 0);
-    }
-
-    // Tip of cone
-    const tipIndex = conePositions.length / 3;
-
-    conePositions.push(0, 3 + height, 0);
-    coneColors.push(1, 0, 0);
-
-    // Base triangles
-    for (let i = 0; i < segments; i++) {
-        const current = i + 1;
-        const next = (i + 1) % segments + 1;
-
-        coneIndices.push(
-            0, next, current
-        );
-    }
-
-
-    // Side triangles
-    for (let i = 0; i < segments; i++) {
-        const current = i + 1;
-        const next = (i + 1) % segments + 1;
-
-        coneIndices.push(
-            current, next, tipIndex
-        );
-    }
-
-    return {
-        positions: new Float32Array(conePositions),
-        colors: new Float32Array(coneColors),
-        indices: new Uint16Array(coneIndices)
-    };
-}
-
-const cone = createCone(1, 2, 32);
