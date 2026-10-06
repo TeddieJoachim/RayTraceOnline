@@ -48,10 +48,9 @@ Press F12 to see the console for debugging.</p>
       <canvas id="glcanvas" width="400" height="400"></canvas>
 
       <div style="margin-top: 10px;">
-        <button id="leanLeft">Lean Left</button>
-        <button id="leanRight">Lean Right</button>
-        <button id="jump">Jump</button>
-        <button id="auto">DANCE 4 ME</button>
+        <button id="wiggleLeft">Wiggle Left</button>
+        <button id="wiggleRight">Wiggle Right</button>
+        <button id="auto">Dance Party</button>
       </div>
     </div>
   </div>
@@ -128,19 +127,32 @@ void main() {
   const tentacle = [];
   const numSpheres = 5;
 
-  let y = 0;
-
   for (let i = 0; i < numSpheres; i++) {
+
       const radius = Math.pow(0.85, i);
 
       tentacle.push({
           sphere: createSphere(radius, 32, 16),
-          y: y
+          radius: radius,
+          children: [],
+          rotation: 0
       });
-
-      y += radius * 1.8;
   }
 
+  // Make each sphere the child of the one below it
+  for (let i = 0; i < numSpheres - 1; i++) {
+      tentacle[i].children.push(tentacle[i + 1]);
+  }
+
+  const matrixStack = [];
+
+  function pushMatrix(matrix) {
+      matrixStack.push(matrix);
+  }
+
+  function popMatrix() {
+      return matrixStack.pop();
+  }
   // Buffers, each sphere gets its own buffer
   function initBuffers() {
       for (let i = 0; i < tentacle.length; i++) {
@@ -226,19 +238,20 @@ void main() {
       });
     
       // grabbing stuff i added to the htm and assigning event handlers
-      document.getElementById("leanLeft").addEventListener("click", () => {
-        targetLeanAngle = -0.35;
+      document.getElementById("wiggleLeft").addEventListener("click", () => {
+        tentacle[0].rotation = 0.3;
+        tentacle[1].rotation = 0.2;
+        tentacle[2].rotation = -0.2;
+        tentacle[3].rotation = -0.3;
+        tentacle[4].rotation = -0.3;
       });
 
-      document.getElementById("leanRight").addEventListener("click", () => {
-        targetLeanAngle = 0.35;
-      });
-
-      document.getElementById("jump").addEventListener("click", () => {
-        if (!jumping) {
-          jumping = true;
-          jumpStartTime = Date.now();
-        }
+      document.getElementById("wiggleRight").addEventListener("click", () => {
+        tentacle[0].rotation = -0.3;
+        tentacle[1].rotation = -0.2;
+        tentacle[2].rotation = 0.2;
+        tentacle[3].rotation = 0.3;
+        tentacle[4].rotation = 0.3;
       });
 
       document.getElementById("auto").addEventListener("click", () => {
@@ -251,7 +264,7 @@ void main() {
     // projection setup
     let fov = Math.PI / 4, aspect = canvas.width / canvas.height, zNear = 0.1, zFar = 100;
 
-    let orthoSize = 20.0; // changed this so i could see more of the scene
+    let orthoSize = 5.0; // changed this so i could see more of the scene
 
     // perspective and orthographic projection
     let projPerspective = perspective(fov, aspect, zNear, zFar);
@@ -261,6 +274,94 @@ void main() {
     flipZ());
     let proj = projOrtho;
 
+    function drawSphere(sphere, transformation) {
+
+      gl.uniformMatrix4fv(
+          uMTM,
+          false,
+          transformation
+      );
+
+      gl.bindBuffer(
+          gl.ARRAY_BUFFER,
+          sphere.vbo
+      );
+
+      gl.enableVertexAttribArray(posLoc);
+
+      gl.vertexAttribPointer(
+          posLoc,
+          3,
+          gl.FLOAT,
+          false,
+          0,
+          0
+      );
+
+      gl.bindBuffer(
+          gl.ARRAY_BUFFER,
+          sphere.cbo
+      );
+
+      gl.enableVertexAttribArray(colorLoc);
+
+      gl.vertexAttribPointer(
+          colorLoc,
+          3,
+          gl.FLOAT,
+          false,
+          0,
+          0
+      );
+
+      gl.bindBuffer(
+          gl.ELEMENT_ARRAY_BUFFER,
+          sphere.ibo
+      );
+
+      gl.drawElements(
+          gl.TRIANGLES,
+          sphere.indices.length,
+          gl.UNSIGNED_SHORT,
+          0
+      );
+  }
+
+  function drawNode(node, parentMatrix, yOffset) {
+
+    // Start with parent's coordinate system
+    let currentMatrix = parentMatrix;
+
+    // Move to this joint
+    currentMatrix = mat4Translate(
+        currentMatrix,
+        [0, yOffset, 0]
+    );
+
+    // Rotate the coordinate system at this joint
+    currentMatrix = mat4RotateZ(
+        currentMatrix,
+        node.rotation
+    );
+
+    // Draw this sphere
+    pushMatrix(currentMatrix);
+
+    drawSphere(node.sphere, currentMatrix);
+
+    // Children inherit this rotated coordinate system
+    for (let child of node.children) {
+
+        drawNode(
+            child,
+            currentMatrix,
+            node.radius * 1.8
+        );
+    }
+
+    popMatrix();
+  }
+
     function render() {
       gl.enable(gl.DEPTH_TEST);
 
@@ -269,19 +370,19 @@ void main() {
 
       let modelViewMatrix = mat4Identity();
 
-    modelViewMatrix = mat4Translate(
-        modelViewMatrix,
-        [camX, camY, camZ]
-    );
+      modelViewMatrix = mat4Translate(
+          modelViewMatrix,
+          [camX, camY, camZ]
+      );
 
       let projOrtho = matMul(
           box2Cube(
-              -5,
-              5,
-              -5,
-              5,
-              0.1,
-              100
+              -orthoSize * aspect,
+              orthoSize * aspect,
+              -orthoSize,
+              orthoSize,
+              zNear,
+              zFar
           ),
           flipZ()
       );
@@ -298,70 +399,14 @@ void main() {
           modelViewMatrix
       );
 
-      // Draw tentacle
-      for (let i = 0; i < tentacle.length; i++) {
+      let rootMatrix = mat4Identity();
 
-          const sphere = tentacle[i].sphere;
-
-          let transformation = mat4Identity();
-
-          transformation = mat4Translate(
-              transformation,
-              [0, tentacle[i].y, 0]
-          );
-
-          gl.uniformMatrix4fv(
-              uMTM,
-              false,
-              transformation
-          );
-
-          gl.bindBuffer(
-              gl.ARRAY_BUFFER,
-              sphere.vbo
-          );
-
-          gl.enableVertexAttribArray(posLoc);
-
-          gl.vertexAttribPointer(
-              posLoc,
-              3,
-              gl.FLOAT,
-              false,
-              0,
-              0
-          );
-
-          gl.bindBuffer(
-              gl.ARRAY_BUFFER,
-              sphere.cbo
-          );
-
-          gl.enableVertexAttribArray(colorLoc);
-
-          gl.vertexAttribPointer(
-              colorLoc,
-              3,
-              gl.FLOAT,
-              false,
-              0,
-              0
-          );
-
-          gl.bindBuffer(
-              gl.ELEMENT_ARRAY_BUFFER,
-              sphere.ibo
-          );
-
-          gl.drawElements(
-              gl.TRIANGLES,
-              sphere.indices.length,
-              gl.UNSIGNED_SHORT,
-              0
-          );
-      }
-  }
-
+      drawNode(
+          tentacle[0],
+          rootMatrix,
+          0
+      );
+}
   // Initialize when page loads
   window.onload = function () {
     setInterval(render, 30);
