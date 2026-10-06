@@ -51,6 +51,7 @@ Press F12 to see the console for debugging.</p>
         <button id="wiggle">Wiggle</button>
         <button id="cease">Halt!</button>
         <button id="jump">Jump</button>
+        <button id="fold">Fold Over</button>
       </div>
     </div>
   </div>
@@ -213,6 +214,11 @@ void main() {
 
     document.getElementById("cease").addEventListener("click", () => {
       stopWiggle();
+      stopFold();
+    });
+
+    document.getElementById("fold").addEventListener("click", () => {
+      startFold();
     });
 
 

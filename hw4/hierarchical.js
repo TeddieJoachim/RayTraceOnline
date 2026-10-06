@@ -10,6 +10,10 @@ let jumpOffset = 0;
 let jumping = false;
 let jumpStartTime = 0;
 
+let foldAngle = 0;
+let folding = false;
+let foldStartTime = 0;
+
 // adding spheres to tentacle
 for (let i = 0; i < numSpheres; i++) {
   const radius = Math.pow(0.85, i);
@@ -76,10 +80,10 @@ function updateJump(time) {
   const duration = 1000; // 1 second
 
   if (elapsed >= duration) {
-      jumpOffset = 0;
-      jumping = false;
-      render();
-      return;
+    jumpOffset = 0;
+    jumping = false;
+    render();
+    return;
   }
 
   const t = elapsed / duration;
@@ -90,6 +94,31 @@ function updateJump(time) {
   render();
 
   requestAnimationFrame(updateJump);
+}
+
+function startFold() {
+  if (folding) return;
+
+  folding = true;
+  foldStartTime = performance.now();
+
+  requestAnimationFrame(updateFold);
+}
+function stopFold() {
+  folding = false;
+  foldStartTime = 0;
+}
+
+function updateFold(time) {
+  if (!folding) return;
+  const elapsed = time - foldStartTime;
+  const speed = 0.004;
+  // Smoothly fold from straight to curled
+  foldAngle = Math.sin(elapsed * speed);
+
+  render();
+
+  requestAnimationFrame(updateFold);
 }
 
 // recursively draws the hierarchy
@@ -106,6 +135,7 @@ function drawNode(node, parentMatrix, yOffset, depth) {
   currentMatrix = mat4RotateZ(
     currentMatrix,
     wiggleAngle * Math.pow(-1, depth)
+    + foldAngle * 0.5
   );
 
   pushMatrix(currentMatrix);
@@ -125,15 +155,15 @@ function drawNode(node, parentMatrix, yOffset, depth) {
 }
 
 
-// Public function for rendering the whole hierarchy
+// function for rendering the whole hierarchy
 function drawTentacle() {
-    let rootMatrix = mat4Identity();
+  let rootMatrix = mat4Identity();
 
-    // Move the entire tentacle upward
-    rootMatrix = mat4Translate(
-      rootMatrix,
-      [0, jumpOffset, 0]
-    );
+  // Move the entire tentacle upward
+  rootMatrix = mat4Translate(
+    rootMatrix,
+    [0, jumpOffset, 0]
+  );
 
-    drawNode(tentacle[0], rootMatrix, 0, 0);
+  drawNode(tentacle[0], rootMatrix, 0, 0);
 }
