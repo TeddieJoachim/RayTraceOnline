@@ -48,9 +48,9 @@ Press F12 to see the console for debugging.</p>
       <canvas id="glcanvas" width="400" height="400"></canvas>
 
       <div style="margin-top: 10px;">
-        <button id="wiggleLeft">Wiggle Left</button>
-        <button id="wiggleRight">Wiggle Right</button>
-        <button id="auto">Dance Party</button>
+        <button id="wiggle">Wiggle</button>
+        <button id="cease">Halt!</button>
+        <button id="jump">Jump</button>
       </div>
     </div>
   </div>
@@ -86,6 +86,7 @@ void main() {
 
   <script src="primitives.js"></script>
   <script src="transformations.js"></script>
+  <script src="hierarchical.js"></script>
 
   <script>
     function createShader(gl, type, source) {
@@ -122,244 +123,157 @@ void main() {
     fragEditor.value = document.getElementById("fragment-shader").textContent;
 
 
-  let program, posLoc, colorLoc, timeLoc, uMVM, uPM, uMTM;
-
-  const tentacle = [];
-  const numSpheres = 5;
-
-  for (let i = 0; i < numSpheres; i++) {
-
-      const radius = Math.pow(0.85, i);
-
-      tentacle.push({
-          sphere: createSphere(radius, 32, 16),
-          radius: radius,
-          children: [],
-          rotation: 0
-      });
-  }
-
-  // Make each sphere the child of the one below it
-  for (let i = 0; i < numSpheres - 1; i++) {
-      tentacle[i].children.push(tentacle[i + 1]);
-  }
-
-  const matrixStack = [];
-
-  function pushMatrix(matrix) {
-      matrixStack.push(matrix);
-  }
-
-  function popMatrix() {
-      return matrixStack.pop();
-  }
-  // Buffers, each sphere gets its own buffer
-  function initBuffers() {
-      for (let i = 0; i < tentacle.length; i++) {
-
+    let program, posLoc, colorLoc, timeLoc, uMVM, uPM, uMTM;
+    // Buffers, each sphere gets its own buffer
+    function initBuffers() {
+        for (let i = 0; i < tentacle.length; i++) {
           const sphere = tentacle[i].sphere;
 
           sphere.vbo = gl.createBuffer();
           gl.bindBuffer(gl.ARRAY_BUFFER, sphere.vbo);
           gl.bufferData(
-              gl.ARRAY_BUFFER,
-              sphere.positions,
-              gl.STATIC_DRAW
+            gl.ARRAY_BUFFER,
+            sphere.positions,
+            gl.STATIC_DRAW
           );
 
           sphere.cbo = gl.createBuffer();
           gl.bindBuffer(gl.ARRAY_BUFFER, sphere.cbo);
           gl.bufferData(
-              gl.ARRAY_BUFFER,
-              sphere.colors,
-              gl.STATIC_DRAW
+            gl.ARRAY_BUFFER,
+            sphere.colors,
+            gl.STATIC_DRAW
           );
 
           sphere.ibo = gl.createBuffer();
           gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, sphere.ibo);
           gl.bufferData(
-              gl.ELEMENT_ARRAY_BUFFER,
-              sphere.indices,
-              gl.STATIC_DRAW
+            gl.ELEMENT_ARRAY_BUFFER,
+            sphere.indices,
+            gl.STATIC_DRAW
           );
-      }
-  }
-
-  initBuffers();
-
-      function initShaderProgram() {
-        try {
-          program = createProgram(gl, vertEditor.value, fragEditor.value);
-          gl.useProgram(program);
-          posLoc = gl.getAttribLocation(program, "aPosition");
-          colorLoc = gl.getAttribLocation(program, "aColor");
-          timeLoc = gl.getUniformLocation(program, "uTime");
-          uMVM = gl.getUniformLocation(program, "uModelViewMatrix");
-          uPM = gl.getUniformLocation(program, "uProjectionMatrix");
-          uMTM = gl.getUniformLocation(program, "uModelTransformationMatrix");
-        } catch (e) { console.error(e); }
-      }
-      initShaderProgram();
-      vertEditor.onkeyup = initShaderProgram;
-      fragEditor.onkeyup = initShaderProgram;
-
-      // Mouse and keyboard interactions
-      let mouseDown = false, lastX, lastY, cubeRotX = 0, cubeRotY = 0;
-      let camX = 0, camY = -4, camZ = -10;
-      let zoom = 6;
-
-      // animation variables
-      let autoMode = false;
-      let autoStartTime = 0;
-      const autoDuration = 10000;
-      let autoPhase = -1;
-
-      canvas.addEventListener('mousedown', e => { mouseDown = true; lastX = e.clientX; lastY = e.clientY; });
-      canvas.addEventListener('mouseup', () => mouseDown = false);
-      canvas.addEventListener('mousemove', e => {
-        if (!mouseDown) return;
-        let dx = e.clientX - lastX;
-        let dy = e.clientY - lastY;
-        cubeRotY += dx * 0.01;
-        cubeRotX += dy * 0.01;
-        lastX = e.clientX; lastY = e.clientY;
-      });
-
-      document.addEventListener('keydown', e => {
-        const step = 0.2;
-        switch (e.key) {
-          case 'ArrowUp': camY -= step; break;
-          case 'ArrowDown': camY += step; break;
-          case 'ArrowLeft': camX += step; break;
-          case 'ArrowRight': camX -= step; break;
-          case 'w': camZ += step; break;
-          case 's': camZ -= step; break;
         }
-      });
+    }
+
+    initBuffers();
+
+    function initShaderProgram() {
+      try {
+        program = createProgram(gl, vertEditor.value, fragEditor.value);
+        gl.useProgram(program);
+        posLoc = gl.getAttribLocation(program, "aPosition");
+        colorLoc = gl.getAttribLocation(program, "aColor");
+        timeLoc = gl.getUniformLocation(program, "uTime");
+        uMVM = gl.getUniformLocation(program, "uModelViewMatrix");
+        uPM = gl.getUniformLocation(program, "uProjectionMatrix");
+        uMTM = gl.getUniformLocation(program, "uModelTransformationMatrix");
+      } catch (e) { console.error(e); }
+    }
+    initShaderProgram();
+    vertEditor.onkeyup = initShaderProgram;
+    fragEditor.onkeyup = initShaderProgram;
+
+    // Mouse and keyboard interactions
+    let mouseDown = false, lastX, lastY, cubeRotX = 0, cubeRotY = 0;
+    let camX = 0, camY = -4, camZ = -10;
+    let zoom = 6;
+
+
+    canvas.addEventListener('mousedown', e => { mouseDown = true; lastX = e.clientX; lastY = e.clientY; });
+    canvas.addEventListener('mouseup', () => mouseDown = false);
+    canvas.addEventListener('mousemove', e => {
+      if (!mouseDown) return;
+      let dx = e.clientX - lastX;
+      let dy = e.clientY - lastY;
+      cubeRotY += dx * 0.01;
+      cubeRotX += dy * 0.01;
+      lastX = e.clientX; lastY = e.clientY;
+    });
+
+    document.addEventListener('keydown', e => {
+      const step = 0.2;
+      switch (e.key) {
+        case 'ArrowUp': camY -= step; break;
+        case 'ArrowDown': camY += step; break;
+        case 'ArrowLeft': camX += step; break;
+        case 'ArrowRight': camX -= step; break;
+        case 'w': camZ += step; break;
+        case 's': camZ -= step; break;
+      }
+    });
     
-      // grabbing stuff i added to the htm and assigning event handlers
-      document.getElementById("wiggleLeft").addEventListener("click", () => {
-        tentacle[0].rotation = 0.3;
-        tentacle[1].rotation = 0.2;
-        tentacle[2].rotation = -0.2;
-        tentacle[3].rotation = -0.3;
-        tentacle[4].rotation = -0.3;
-      });
+    // grabbing stuff i added to the htm and assigning event handlers
+    document.getElementById("wiggle").addEventListener("click", () => {
+      startWiggle();
+    });
 
-      document.getElementById("wiggleRight").addEventListener("click", () => {
-        tentacle[0].rotation = -0.3;
-        tentacle[1].rotation = -0.2;
-        tentacle[2].rotation = 0.2;
-        tentacle[3].rotation = 0.3;
-        tentacle[4].rotation = 0.3;
-      });
+    document.getElementById("jump").addEventListener("click", () => {
+      startJump();
+    });
 
-      document.getElementById("auto").addEventListener("click", () => {
-        autoMode = true;
-        autoStartTime = Date.now();
-        autoPhase = -1;
-      });
+    document.getElementById("cease").addEventListener("click", () => {
+      stopWiggle();
+    });
 
 
     // projection setup
     let fov = Math.PI / 4, aspect = canvas.width / canvas.height, zNear = 0.1, zFar = 100;
-
     let orthoSize = 5.0; // changed this so i could see more of the scene
-
     // perspective and orthographic projection
     let projPerspective = perspective(fov, aspect, zNear, zFar);
-
-    let projOrtho = matMul(
-    box2Cube(-orthoSize * aspect, orthoSize * aspect, -orthoSize, orthoSize, zNear, zFar),
-    flipZ());
+    let projOrtho = matMul(box2Cube(-orthoSize * aspect, orthoSize * aspect, -orthoSize, orthoSize, zNear, zFar),flipZ());
     let proj = projOrtho;
 
     function drawSphere(sphere, transformation) {
-
       gl.uniformMatrix4fv(
-          uMTM,
-          false,
-          transformation
+        uMTM,
+        false,
+        transformation
       );
 
       gl.bindBuffer(
-          gl.ARRAY_BUFFER,
-          sphere.vbo
+        gl.ARRAY_BUFFER,
+        sphere.vbo
       );
 
       gl.enableVertexAttribArray(posLoc);
 
       gl.vertexAttribPointer(
-          posLoc,
-          3,
-          gl.FLOAT,
-          false,
-          0,
-          0
+        posLoc,
+        3,
+        gl.FLOAT,
+        false,
+        0,
+        0
       );
 
       gl.bindBuffer(
-          gl.ARRAY_BUFFER,
-          sphere.cbo
+        gl.ARRAY_BUFFER,
+        sphere.cbo
       );
 
       gl.enableVertexAttribArray(colorLoc);
 
       gl.vertexAttribPointer(
-          colorLoc,
-          3,
-          gl.FLOAT,
-          false,
-          0,
-          0
+        colorLoc,
+        3,
+        gl.FLOAT,
+        false,
+        0,
+        0
       );
 
       gl.bindBuffer(
-          gl.ELEMENT_ARRAY_BUFFER,
-          sphere.ibo
+        gl.ELEMENT_ARRAY_BUFFER,
+        sphere.ibo
       );
 
       gl.drawElements(
-          gl.TRIANGLES,
-          sphere.indices.length,
-          gl.UNSIGNED_SHORT,
-          0
+        gl.TRIANGLES,
+        sphere.indices.length,
+        gl.UNSIGNED_SHORT,
+        0
       );
-  }
-
-  function drawNode(node, parentMatrix, yOffset) {
-
-    // Start with parent's coordinate system
-    let currentMatrix = parentMatrix;
-
-    // Move to this joint
-    currentMatrix = mat4Translate(
-        currentMatrix,
-        [0, yOffset, 0]
-    );
-
-    // Rotate the coordinate system at this joint
-    currentMatrix = mat4RotateZ(
-        currentMatrix,
-        node.rotation
-    );
-
-    // Draw this sphere
-    pushMatrix(currentMatrix);
-
-    drawSphere(node.sphere, currentMatrix);
-
-    // Children inherit this rotated coordinate system
-    for (let child of node.children) {
-
-        drawNode(
-            child,
-            currentMatrix,
-            node.radius * 1.8
-        );
-    }
-
-    popMatrix();
   }
 
     function render() {
@@ -371,42 +285,28 @@ void main() {
       let modelViewMatrix = mat4Identity();
 
       modelViewMatrix = mat4Translate(
-          modelViewMatrix,
-          [camX, camY, camZ]
+        modelViewMatrix,
+        [camX, camY, camZ]
       );
 
+      // Projection setup...
       let projOrtho = matMul(
-          box2Cube(
-              -orthoSize * aspect,
-              orthoSize * aspect,
-              -orthoSize,
-              orthoSize,
-              zNear,
-              zFar
-          ),
-          flipZ()
+        box2Cube(
+          -orthoSize * aspect,
+          orthoSize * aspect,
+          -orthoSize,
+          orthoSize,
+          zNear,
+          zFar
+        ),
+        flipZ()
       );
 
-      gl.uniformMatrix4fv(
-          uPM,
-          false,
-          projOrtho
-      );
+      gl.uniformMatrix4fv(uPM, false, projOrtho);
+      gl.uniformMatrix4fv(uMVM, false, modelViewMatrix);
 
-      gl.uniformMatrix4fv(
-          uMVM,
-          false,
-          modelViewMatrix
-      );
-
-      let rootMatrix = mat4Identity();
-
-      drawNode(
-          tentacle[0],
-          rootMatrix,
-          0
-      );
-}
+      drawTentacle();
+    }
   // Initialize when page loads
   window.onload = function () {
     setInterval(render, 30);
