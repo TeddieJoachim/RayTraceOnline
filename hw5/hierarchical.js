@@ -1,19 +1,6 @@
 const tentacle = [];
 const numSpheres = 5;
 
-// animation variables
-let wiggleAngle = 0;
-let wiggleActive = false;
-let wiggleStartTime = 0;
-
-let jumpOffset = 0;
-let jumping = false;
-let jumpStartTime = 0;
-
-let foldAngle = 0;
-let folding = false;
-let foldStartTime = 0;
-
 // adding spheres to tentacle
 for (let i = 0; i < numSpheres; i++) {
   const radius = Math.pow(0.85, i);
@@ -39,33 +26,11 @@ function popMatrix() {
   return matrixStack.pop();
 }
 
+// animation variables
+let jumpOffset = 0;
+let jumping = false;
+let jumpStartTime = 0;
 // public function to begin animation
-function startWiggle() {
-  wiggleActive = true;
-  wiggleStartTime = performance.now();
-  requestAnimationFrame(updateWiggle);
-}
-function stopWiggle() {
-  wiggleActive = false;
-  wiggleStartTime = 0;
-}
-// calculates new offset of sphere during wiggle
-function updateWiggle(time) {
-  if (!wiggleActive) {
-    return;
-  }
-
-  const amplitude = 0.7;
-  const speed = 0.004;
-
-  wiggleAngle = amplitude * Math.sin((time - wiggleStartTime) * speed);
-
-  render();
-
-  // handy function that tells the browser to run updateWiggle again before next render
-  requestAnimationFrame(updateWiggle);
-}
-
 function startJump() {
   if (jumping) return;
 
@@ -88,7 +53,7 @@ function updateJump(time) {
 
   const t = elapsed / duration;
 
-  // Parabolic jump: starts at 0, rises, then returns to 0
+  // starts at 0, rises, then returns to 0
   jumpOffset = 2.0 * 4 * t * (1 - t);
 
   render();
@@ -96,29 +61,19 @@ function updateJump(time) {
   requestAnimationFrame(updateJump);
 }
 
-function startFold() {
-  if (folding) return;
+let foldAngle = 0;
+let targetFoldAngle = 0;
 
-  folding = true;
-  foldStartTime = performance.now();
-
-  requestAnimationFrame(updateFold);
-}
-function stopFold() {
-  folding = false;
-  foldStartTime = 0;
+function foldRight() {
+  targetFoldAngle = -1.0;
 }
 
-function updateFold(time) {
-  if (!folding) return;
-  const elapsed = time - foldStartTime;
-  const speed = 0.004;
-  // Smoothly fold from straight to curled
-  foldAngle = Math.sin(elapsed * speed);
+function foldLeft() {
+  targetFoldAngle = 1.0;
+}
 
-  render();
-
-  requestAnimationFrame(updateFold);
+function unfold() {
+  targetFoldAngle = 0;
 }
 
 // recursively draws the hierarchy
@@ -134,8 +89,7 @@ function drawNode(node, parentMatrix, yOffset, depth) {
   // Rotate this joint
   currentMatrix = mat4RotateZ(
     currentMatrix,
-    wiggleAngle * Math.pow(-1, depth)
-    + foldAngle * 0.5
+    foldAngle * 0.5
   );
 
   pushMatrix(currentMatrix);
