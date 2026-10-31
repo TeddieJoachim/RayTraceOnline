@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include "boids.h"
+#include <emscripten/emscripten.h>
 
 
 // MALLOCS the position and velocity vectors, assigns values to them and all other BOID fields
@@ -23,7 +24,8 @@ void setBoidAttributes(Boid* disBoid)
   }
 }
 
-Boid* initializeBoids(int numBoids, float* worldBoundary)
+EMSCRIPTEN_KEEPALIVE
+Boid* initializeBoids(int numBoids)
 {
   int idx = 0;
   Boid* themBoids = malloc(numBoids * sizeof(Boid));
@@ -31,6 +33,7 @@ Boid* initializeBoids(int numBoids, float* worldBoundary)
   while (idx < numBoids)
   {
     setBoidAttributes(&themBoids[idx]);
+    printBoid(&themBoids[idx]);
     idx++;
   }
   
