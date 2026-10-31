@@ -1,8 +1,11 @@
+// import a renderer object
+import { Renderer } from "./renderer.js";
 let Module; // C functions will be called through module._(a c func name)
 
-// grab webgl rendering context
+// grab webgl rendering context and instantiate renderer
 const canvas = document.getElementById("gameCanvas");
 const gl = canvas.getContext("webgl2");
+const renderer = new Renderer(canvas);
 
 if (!gl) {
   console.error("Ruh roh couldn't load webgl2");
@@ -15,7 +18,7 @@ async function startGame() {
   Module._initializeBoids();
 
   runGame(Module);
-  Module._freeBoids();
+  //Module._freeBoids(); FREE THEM BOIDS WHEN YOU'RE DONE
 }
 
 
@@ -32,12 +35,12 @@ function runGame(Module) {
   // For now, I would like to render a single Boid as a sphere or triangle at (0,0,0)
 
   function gameLoop() {
+    // Update shared heap memory
     Module._advanceBoids();
+    console.log("first boid is at %f %f %f\n", sharedHeapCoords[0], sharedHeapCoords[1], sharedHeapCoords[2]);
 
-    // read from sharedHeapCoords 
-    console.log(sharedHeapCoords[3]);
-
-    // render using sharedHeapCoords
+    // render using sharedHeapCoords (this is a pointer, not a copy!)
+    renderer.render(sharedHeapCoords);
 
     // next frame
     requestAnimationFrame(gameLoop);

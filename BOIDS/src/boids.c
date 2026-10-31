@@ -52,7 +52,9 @@ EMSCRIPTEN_KEEPALIVE
 void advanceBoids()
 {
   int bI, pI;
-
+  boidSharedPositions[0] += 0.001f;
+  boidSharedPositions[1] += 0.001f;
+  boidSharedPositions[2] += 0.001f;
 }
 
 EMSCRIPTEN_KEEPALIVE
