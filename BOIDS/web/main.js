@@ -1,4 +1,12 @@
-let Module;
+let Module; // C functions will be called through module._(a c func name)
+
+// grab webgl rendering context
+const canvas = document.getElementById("gameCanvas");
+const gl = canvas.getContext("webgl2");
+
+if (!gl) {
+  console.error("Ruh roh couldn't load webgl2");
+}
 
 // async needed so that javascript doesn't just mosey along and do other shit
 async function startGame() {
