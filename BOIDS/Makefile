@@ -1,23 +1,21 @@
 # compiler
 EMCC = emcc 
 
-# in order: -O2 enables compiler optimization, 
+# -O2 enables compiler optimization, 
 # -sMODULARIZE=1 wraps the generated javascript in a function that can generate the module
+# -sEXPORTED_RUNTIME_METHODS=HEAPU8 gives us access to shared heap memory
 # -sEXPORT_NAME names the function that will load the module
 CFLAGS = -O2 -sMODULARIZE=1 -sEXPORTED_RUNTIME_METHODS=HEAPU8 -sEXPORT_NAME=createWASMModule 
 
-TARGET = boidRunner.js
+TARGET = build/boidRunner.js
 
 all: $(TARGET)
 
-$(TARGET): boids.c 
-	$(EMCC) boids.c $(CFLAGS) -o $(TARGET)
+$(TARGET): src/boids.c 
+	$(EMCC) src/boids.c $(CFLAGS) -o $(TARGET)
 
 serve: all 
 	python3 -m http.server 8000 
 
-killServe: all 
-	fuser -k 8000/tcp
-
 clean:
-	rm -f boidRunner.js boidRunner.wasm 
+	rm -r build/boidRunner.js build/boidRunner.wasm 
