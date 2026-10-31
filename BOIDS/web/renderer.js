@@ -3,11 +3,11 @@ a shader program, create a vertex buffer, place vertices into it, tell WebGl how
 interpret this data, then draw the shape. */
 
 import { vertexShaderSource, fragmentShaderSource } from "./shaders.js";
-import { createTriangle } from "./primitives.js"; // TODO import createBird here lol
+import { createBirdVertices } from "./primitives.js"; // TODO import createBird here lol
 
 
 export class Renderer {
-  constructor(canvas) {
+  constructor(canvas, boidDim) {
     this.gl = canvas.getContext("webgl2");
 
     if (!this.gl) {
@@ -39,12 +39,6 @@ export class Renderer {
     this.buffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, this.buffer);
 
-    // TODO create bird here
-    const vertices = createTriangle();
-
-    // STATIC_DRAW will need to be changed for moving birds, this places vertices into our buffer
-    gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
-
     // connect vertex data and aPosition. this function asks where is aPosition in the shader program
     // returns an int representing its attribute location 
     const positionLocation = gl.getAttribLocation(this.program, "aPosition");
@@ -52,9 +46,8 @@ export class Renderer {
     // causes webgl to feed vertex data to aPosition 
     gl.enableVertexAttribArray(positionLocation);
 
-    //TODO just hard code 3 in the C program?
-    // positionLocation -> aPosition receives data, 3 -> 3 values per vertex, they are floats, don't normalize them, stride and start = 0.
-    gl.vertexAttribPointer(positionLocation, 3, gl.FLOAT, false, 0, 0);
+    // positionLocation -> aPosition receives data, boidDim -> boidDim values per vertex, gl.FLOAT -> they are floats, false -> don't normalize them, stride and start = 0.
+    gl.vertexAttribPointer(positionLocation, boidDim, gl.FLOAT, false, 0, 0);
 
     // unbind our vao. A VAO is a saved description of how vertex data is organized and connected to shader inputs. 
     // Unbinding it doesn't destroy that description it just stops making it the active configuration.
@@ -75,7 +68,7 @@ export class Renderer {
     return shader;
   }
 
-  render(sharedHeapCoords) {
+  render(sharedHeapCoords, numBoids) {
     const gl = this.gl;
 
     gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
@@ -83,16 +76,14 @@ export class Renderer {
     gl.clearColor(0.1, 0.1, 0.1, 1.0);
     gl.clear(gl.COLOR_BUFFER_BIT);
 
-    //TODO this is just a test
-    const firstBoid = sharedHeapCoords.subarray(0,3);
-
+  
     // give position to GPU 
     gl.bindBuffer(gl.ARRAY_BUFFER, this.buffer);
-    gl.bufferData(gl.ARRAY_BUFFER, firstBoid, gl.DYNAMIC_DRAW);
+    gl.bufferData(gl.ARRAY_BUFFER, sharedHeapCoords, gl.DYNAMIC_DRAW);
 
     gl.useProgram(this.program);
     gl.bindVertexArray(this.vao);
 
-    gl.drawArrays(gl.POINTS, 0, 1);
+    gl.drawArrays(gl.POINTS, 0, numBoids);
   }
 }

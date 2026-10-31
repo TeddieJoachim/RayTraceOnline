@@ -3,7 +3,7 @@
 
 typedef struct Boid {
   char visualRange;
-  float accelaration;
+  float* acceleration;
   float* position;
   float* velocity;
 } Boid;
