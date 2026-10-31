@@ -4,7 +4,7 @@ EMCC = emcc
 # in order: -O2 enables compiler optimization, 
 # -sMODULARIZE=1 wraps the generated javascript in a function that can generate the module
 # -sEXPORT_NAME names the function that will load the module
-CFLAGS = -O2 -sMODULARIZE=1 -sEXPORT_NAME=createWASMModule 
+CFLAGS = -O2 -sMODULARIZE=1 -sEXPORTED_RUNTIME_METHODS=HEAPU8 -sEXPORT_NAME=createWASMModule 
 
 TARGET = boidRunner.js
 

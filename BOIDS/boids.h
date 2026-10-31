@@ -2,21 +2,26 @@
 #define BOIDS_H
 
 typedef struct Boid {
-  float visualRange;
+  char visualRange;
   float* position;
   float accelaration;
   float* velocity;
 } Boid;
 
+#define TRUE 1
+#define FALSE 0
 #define NUM_DIM 3
-#define WORLD_BOUNDARY 0 // obviously a temp thing, needs to match players FOV?
 
-Boid* initializeBoids(int numBoids);
+Boid* initializeBoids();
 
 Boid* advanceBoids();
 
-void printBoid(Boid* thisBoid);
+float* getBoidPositions();
 
-void freeBoids(Boid* toFree, int numBoids);
+int getNumBoids();
+
+int howManyBytesInABoid();
+
+void freeBoids();
 
 #endif
