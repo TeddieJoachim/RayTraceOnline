@@ -19,7 +19,9 @@ function runGame(Module) {
   // Module._getBoidPos returns the address we begin reading  
   // we read numPositions (bytes * sizeof(float)) = 4 bytes * numFloats
   const sharedHeapCoords = new Float32Array(Module.HEAPU8.buffer, Module._getBoidPositions(), numPositions);
-  
+
+  // TODOS include making our simulation domain, and initializing the boids to random positions in this domain.
+  // For now, I would like to render a single Boid as a sphere or triangle at (0,0,0)
 
   function gameLoop() {
     Module._advanceBoids();

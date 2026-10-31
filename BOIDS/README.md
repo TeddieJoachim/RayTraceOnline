@@ -1,6 +1,6 @@
 ## BOIDS
 
-This project uses **C and WebAssembly (WASM)** for the boids simulation and JavaScript/WebGL for browser-side game logic and rendering.
+Uses **C and WebAssembly (WASM)** for the boids simulation and JavaScript/WebGL for browser-side game logic and rendering.
 
 The C code is compiled with **Emscripten**, which produces:
 - A `.wasm` file containing the compiled C code.

@@ -38,7 +38,7 @@ void initializeBoids()
     // for each x,y,z in the case of 3dim boids, set the initial values of position and velocity
     for (int idx = 0; idx < NUM_DIM; idx++)
     {
-      themBoids[bI].position[idx] = bI; 
+      themBoids[bI].position[idx] = 0; // TODO: random positions across the domain
       themBoids[bI].velocity[idx] = 0;
       // for this boid, write its position values to the shared heap memory as they are initialized
       boidSharedPositions[(bI * NUM_DIM) + idx] = themBoids[bI].position[idx];
@@ -52,7 +52,7 @@ EMSCRIPTEN_KEEPALIVE
 void advanceBoids()
 {
   int bI, pI;
-  
+
 }
 
 EMSCRIPTEN_KEEPALIVE
