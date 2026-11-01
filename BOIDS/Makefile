@@ -1,11 +1,12 @@
 # compiler
 EMCC = emcc 
 
+# -lm links math library
 # -O2 enables compiler optimization, 
 # -sMODULARIZE=1 wraps the generated javascript in a function that can generate the module
 # -sEXPORTED_RUNTIME_METHODS=HEAPU8 gives us access to shared heap memory
 # -sEXPORT_NAME names the function that will load the module
-CFLAGS = -O2 -sMODULARIZE=1 -sEXPORTED_RUNTIME_METHODS=HEAPU8 -sEXPORT_NAME=createWASMModule 
+CFLAGS = -lm -O2 -sMODULARIZE=1 -sEXPORTED_RUNTIME_METHODS=HEAPU8 -sEXPORT_NAME=createWASMModule 
 
 TARGET = build/boidRunner.js
 

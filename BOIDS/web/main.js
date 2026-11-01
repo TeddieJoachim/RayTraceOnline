@@ -13,11 +13,11 @@ if (!gl) {
 // async needed so that javascript doesn't just mosey along and do other shit
 async function startGame() {
   Module = await createWASMModule(); // Locks things up until we get our WASM
-
   // if we want javascript/webgl to control the number of boids, do it here 
   Module._initializeBoids();
 
   runGame(Module);
+
   //Module._freeBoids();                                                                  FREE THEM BOIDS WHEN YOU'RE DONE
 }
 
@@ -32,14 +32,25 @@ function runGame(Module) {
   // we read numPositions (bytes * sizeof(float)) = 4 bytes * numFloats
   const sharedHeapCoords = new Float32Array(Module.HEAPU8.buffer, Module._getBoidPositions(), numPositions);
 
-  // TODOS include making our simulation domain, and initializing the boids to random positions in this domain.
-  // eventually, have to account for camera and all that shit, gonna get rowdy
+  const delTime = 1.0/60.0; 
+  let prevTime = 0;
+  let accumulator = 0.0;
 
-  function gameLoop() {
-    // Update shared heap memory
-    Module._advanceBoids();
-    console.log(sharedHeapCoords);
+  // currTime is supplied by requestAnimationFrame
+  function gameLoop(currTime) {
+    // convert milliseconds to seconds 
+    const frameTime = (currTime - prevTime) / 1000.0;
+    prevTime = currTime;
 
+    // accumulate elapsed time. if rendering fluctuates between FPS, this keeps simulation consistent
+    accumulator += Math.min(frameTime, 0.25);
+    // we run simulation at fixed intervals
+    while (accumulator >= delTime) {
+      Module._advanceBoids(delTime); // Update shared heap memory
+      accumulator -= delTime;
+    }
+
+    
     // render using sharedHeapCoords (this is a pointer, not a copy!)
     renderer.render(sharedHeapCoords, numBoids);
 
@@ -50,4 +61,4 @@ function runGame(Module) {
   requestAnimationFrame(gameLoop);
 }
 
-startGame();
+startGame(); 

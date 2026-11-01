@@ -2,7 +2,7 @@
 #define BOIDS_H
 
 typedef struct Boid {
-  char visualRange;
+  int myIdx;
   float* acceleration;
   float* position;
   float* velocity;
@@ -11,7 +11,7 @@ typedef struct Boid {
 // MALLOCS Boids and their fields as well as shared boidPositions, and assigns initial values. TODO: Check malloc return vals
 void initializeBoids();
 
-void advanceBoids();
+void advanceBoids(float delT);
 
 // returns base pointer to shared heap memory with WebAssembly
 float* getBoidPositions();
