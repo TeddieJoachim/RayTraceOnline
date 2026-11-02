@@ -1,7 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <time.h>
-#include <math.h>
+#include "vector.h"
 #include "boids.h"
 
 
@@ -12,7 +12,7 @@
 #define EMSCRIPTEN_KEEPALIVE
 #endif
 
-#define NUM_BOIDS 50 // CAN NEVER BE 1!
+#define NUM_BOIDS 500 // CAN NEVER BE 1!
 #define NUM_DIM 3
 #define WORLD_MIN -1.0f
 #define WORLD_MAX 1.0f
@@ -86,28 +86,10 @@ void initializeBoids()
 }
 
 
-// TODO make these safe or use someones library
-// NOT SAFE, up to the caller.
-// Writes result of addition to target. dim must be dim of target, and for addition to 
-// be defined, dimension of v1, v2 as well.
-void vectorAdd(float* target, const float* v1, const float* v2, int dim){for (int i = 0; i < dim; i++) target[i] = v1[i] + v2[i];}
-void vectorSubtract(float* target, const float* v1, const float* v2, int dim){for (int i = 0; i < dim; i++) target[i] = v1[i] - v2[i];}
-// Also unsafe for above reasons.
-void vectorScalar(float* vec, float scalar, int dim){for (int i = 0; i < dim; i++) vec[i] *= scalar;}
-float vecMagnitude(float* vec, int dim)
-{
-  float res = 0.0;
-  for (int i = 0; i < dim; i++) res += vec[i] * vec[i];
-  return sqrtf(res);
-}
-void zeroVec(float* vec, int dim) {for (int i = 0; i < dim; i++) vec[i] = 0.0;}
-
-
-
-void calculateAcceleration(Boid* thisBoid, int flockSize)
+void updateAcceleration(Boid* thisBoid, int flockSize)
 {
   float v1[NUM_DIM]; // Average position of all other birds
-  float v2[NUM_DIM]; // Separation vector, steer us away from other birds
+  float v2[NUM_DIM]; // Average separation vector, steer us away from other birds
   float distToOthers[NUM_DIM];
   float v3[NUM_DIM]; // Average velocity of flock
   float accelMag, distMag;
@@ -118,6 +100,7 @@ void calculateAcceleration(Boid* thisBoid, int flockSize)
   zeroVec(v2, NUM_DIM);
   zeroVec(v3, NUM_DIM);
 
+  // extract into function?
   for (int bI = 0; bI < flockSize; bI++) 
   {
     Boid* currentBird = &themBoids[bI];
@@ -127,51 +110,58 @@ void calculateAcceleration(Boid* thisBoid, int flockSize)
       // check if |(other position - my position)| is in my visual range
       vectorSubtract(distToOthers, currentBird->position, thisBoid->position, NUM_DIM);
       distMag = vecMagnitude(distToOthers, NUM_DIM);
+
+      // if they are, add their position to the average position of neighbors, and add their velocity to the average velocity
       if (distMag < PERCEPTION_RADIUS)
       {
         neighborCnt++;  
-        // average position += (average position + current position) 
         vectorAdd(v1, v1, currentBird->position, NUM_DIM);
-        // average velocity += (average velocity + current velocity)
         vectorAdd(v3, v3, currentBird->velocity, NUM_DIM);
       }
       // only steer away from birds we are about to hit
+      // that is, set distToOthers = my position - their position = a vector pointing from them to me
+      // add this vector to the vector containing the average
+      // later we will follow this vector by adding it to our accelaration to steer away from the neighbors
       if (distMag < COLLISION_RADIUS)
       {
-        // distToOthers =  (myPos - theirPos)
         vectorSubtract(distToOthers, thisBoid->position, currentBird->position,  NUM_DIM);
-        // seperation vector = 0 - (myPos - theirPos)
         vectorAdd(v2, v2, distToOthers, NUM_DIM);
       }
     }
   }
 
+  // now actually update accelaration based on the average position and velocity of the flock
+  // after some weighting, and ensuring our final vectors point where we want to go below
   if (neighborCnt > 0)
   {
-    // yields direction towards center of mass scaled to 1%
+    // yields direction towards center of mass scaled by 1 / number of neighbors
     vectorScalar(v1, 1.0f / neighborCnt, NUM_DIM);
     // this converts v1 into a steering direction, v1 = averagePos - myPos 
+    // yields a vector pointing from me to the average, we want to follow that
     vectorSubtract(v1, v1, thisBoid->position, NUM_DIM);
-    vectorScalar(v1, COHESION_WEIGHT, NUM_DIM); // weight impacts cohesion. higher weight -> more flocking
+    // now we weight this vector
+    vectorScalar(v1, COHESION_WEIGHT, NUM_DIM);
 
-    // divide sum of flock velocity by flock size to get average
-    // This yields the difference between my velocity and the others
+    // divide sum of flock velocity by flock size (num neighbors) to get average
     vectorScalar(v3, 1.0f / neighborCnt, NUM_DIM);
-    // this converts average velocity into a steering direction, v3 = average velocity - my velocity
+    // this converts average velocity into a steering direction, a vector pointing from me to the average
     vectorSubtract(v3, v3, thisBoid->velocity, NUM_DIM);
-    vectorScalar(v3, ALIGNMENT_WEIGHT, NUM_DIM); // Alignment. Higher weight -> more similar directions
+    // then we weight this steering vector
+    vectorScalar(v3, ALIGNMENT_WEIGHT, NUM_DIM);
   }
 
-  // scale down seperation vector as well
+  // weight the seperation vector, currently just a sum of vectors pointing away from potential collisions
+  // outside of if statement because we are only avoiding collisions
   vectorScalar(v2, SEPERATION_WEIGHT, NUM_DIM);
 
-  // zero out our acceleration from previous steps
+  // zero out our acceleration from previous steps, should end up with something close to what we had before. 
   zeroVec(thisBoid->acceleration, NUM_DIM);
-  // now add the average position and the steer away vector to our acceleration (we move towards the average but avoid hitting neighbors)
+  // now add the average position and the steer away vector to our acceleration (we move towards the average but avoid neighbors)
   vectorAdd(thisBoid->acceleration, v1, v2, NUM_DIM);
-  // finally our acceleration = our acceleration thus far + the average velocity of the flock (we try to match velocities)
+  // finally our acceleration = our acceleration 0 + the average velocity of the flock (we try to match velocities)
   vectorAdd(thisBoid->acceleration, thisBoid->acceleration, v3, NUM_DIM);
 
+  // if birds are wildin out set their acceleration to max
   accelMag = vecMagnitude(thisBoid->acceleration, NUM_DIM);
   if (accelMag > MAX_ACCELERATION)
   {
@@ -189,9 +179,10 @@ void advanceBoids(float delT)
   Boid thisBoid;
 
   // calculate every birds acceleration
+  // the O(N**2) bit is this bit
   for (birdIdx = 0; birdIdx < NUM_BOIDS; birdIdx++)
   {
-    calculateAcceleration(&themBoids[birdIdx], NUM_BOIDS);
+    updateAcceleration(&themBoids[birdIdx], NUM_BOIDS);
   }
 
   // now update their velocity and position. that is, 
@@ -204,34 +195,38 @@ void advanceBoids(float delT)
     if (speed < TARGET_SPEED)
     {
       speedDiff = TARGET_SPEED - speed; // I gotta catch up!
+      
+      //                                                    Replace this with a call to one of our vector Fs.
       for (coordIdx = 0; coordIdx < NUM_DIM; coordIdx++)
       {
-        thisBoid.acceleration[coordIdx] += SPEED_MAINTENANCE_WEIGHT * speedDiff * (thisBoid.velocity[coordIdx] / speed);
+        thisBoid.acceleration[coordIdx] += SPEED_MAINTENANCE_WEIGHT * speedDiff * (thisBoid.velocity[coordIdx] / speed); // why last term?
       }
     }
-    // cap their acceleration
+    // set to max acceleration if they are rocketing
     accelMag = vecMagnitude(thisBoid.acceleration, NUM_DIM);
-
     if (accelMag > MAX_ACCELERATION) 
     {
       vectorScalar(thisBoid.acceleration, MAX_ACCELERATION / accelMag, NUM_DIM);
     }
 
-    // update velocities
+    // update velocities                                     Replace this with a call to one of our vector Fs.
+    // delT is set to 1/60. so every call to advance is like 1/60th a second to create a smooth picture of the simulation.
+    // otherwise, each call is like 1 second, or delT = 1, and that'll look like shit partner
     for (coordIdx = 0; coordIdx < NUM_DIM; coordIdx++)
     {
       thisBoid.velocity[coordIdx] += thisBoid.acceleration[coordIdx] * delT;
     }
     
-    // check speed after update
+    // check speed after update, set to max speed if too speedy
     speed = vecMagnitude(thisBoid.velocity, NUM_DIM);
-    if (speed > MAX_SPEED) vectorScalar(thisBoid.velocity, MAX_SPEED/speed, NUM_DIM);
+    if (speed > MAX_SPEED) vectorScalar(thisBoid.velocity, MAX_SPEED / speed, NUM_DIM);
     
     // update position and shared positions
     for (coordIdx = 0; coordIdx < NUM_DIM; coordIdx++)
     {
       thisBoid.position[coordIdx] += thisBoid.velocity[coordIdx] * delT;
-      // TEMPORARY BOUNDARY HANDLING
+      
+      //                                                                    TEMPORARY BOUNDARY HANDLING
       if (thisBoid.position[coordIdx] > WORLD_MAX)
       {
         thisBoid.position[coordIdx] = WORLD_MAX;

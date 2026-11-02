@@ -12,8 +12,8 @@ TARGET = build/boidRunner.js
 
 all: $(TARGET)
 
-$(TARGET): src/boids.c 
-	$(EMCC) src/boids.c $(CFLAGS) -o $(TARGET)
+$(TARGET): src/boids.c src/vector.c
+	$(EMCC) src/boids.c src/vector.c $(CFLAGS) -o $(TARGET)
 
 serve: all 
 	python3 -m http.server 8000 

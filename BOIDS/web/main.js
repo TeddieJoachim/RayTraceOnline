@@ -38,13 +38,18 @@ function runGame(Module) {
 
   // currTime is supplied by requestAnimationFrame
   function gameLoop(currTime) {
-    // convert milliseconds to seconds 
-    const frameTime = (currTime - prevTime) / 1000.0;
+    if (prevTime == null) prevTime = currTime; // don't panic and update the simulation a bunch on first iteration
+    const elapsedTime = (currTime - prevTime) / 1000.0;
     prevTime = currTime;
 
-    // accumulate elapsed time. if rendering fluctuates between FPS, this keeps simulation consistent
-    accumulator += Math.min(frameTime, 0.25);
-    // we run simulation at fixed intervals
+    // to get a smooth picture, we take a bunch of little snapshots of the simulation with step size delT
+    // we also want this to happen in these discrete increments regardless of how frequently render is being called
+    // so we accumulate how much time passes between running the simulation and rendering, and then run the simulation for the same amount of time
+    // if we don't use this, there is one update per rendered frame, and if frame rate drops, our simulation slows
+    // we don't want that, so we run as much "game time" as is required to catch up, with a small timestep delTime
+    // if we have to play a lot of catchup, there could be lagginess/stuttering if the simulation makes up for this lost time (hasnt happened yet)
+    // one potential solution is interpolating between simulation states, which ill put as todo                           INTERPOLATING BETWEEN SIMULATION STATES COULD MAKE SMOOTHER
+    accumulator += elapsedTime;
     while (accumulator >= delTime) {
       Module._advanceBoids(delTime); // Update shared heap memory
       accumulator -= delTime;
