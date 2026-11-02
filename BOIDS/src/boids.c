@@ -14,8 +14,12 @@
 
 #define NUM_BOIDS 500 // CAN NEVER BE 1!
 #define NUM_DIM 3
-#define WORLD_MIN -1.0f
+#define WORLD_MIN -1.0f // thresholds for detecting collision with boundary, based on webgl vals [-1,1]
 #define WORLD_MAX 1.0f
+#define BOUNDARY_PROXIMITY_THRESHOLD 0.5f
+#define BOUNDARY_WEIGHT 2.0f // gently steer us away from boundaries
+
+#define NUMERICAL_TOLERANCE 0.0001f
 
 #define MAX_SPEED 1.5f
 #define MAX_ACCELERATION 1.0f
@@ -175,7 +179,7 @@ EMSCRIPTEN_KEEPALIVE
 void advanceBoids(float delT)
 {
   int birdIdx, coordIdx, sharedPosIdx;
-  float speed, speedDiff, accelMag;
+  float velocityMag, speedDiff, accelMag, distToMax, distToMin;
   Boid thisBoid;
 
   // calculate every birds acceleration
@@ -191,17 +195,40 @@ void advanceBoids(float delT)
   {
     thisBoid = themBoids[birdIdx];
     
-    speed = vecMagnitude(thisBoid.velocity, NUM_DIM);
-    if (speed < TARGET_SPEED)
+    // check if too slow
+    velocityMag = vecMagnitude(thisBoid.velocity, NUM_DIM);
+    if (velocityMag > NUMERICAL_TOLERANCE && velocityMag < TARGET_SPEED)
     {
-      speedDiff = TARGET_SPEED - speed; // I gotta catch up!
+      speedDiff = TARGET_SPEED - velocityMag; // I gotta catch up!
       
       //                                                    Replace this with a call to one of our vector Fs.
+      // add a portion of the speed difference to the boids acceleration
+      // maintain current direction by adding the product of speed diff and the normalized velocity vector
+      // this product produces an acceleration vector pointing in the direction we were already headed.
       for (coordIdx = 0; coordIdx < NUM_DIM; coordIdx++)
       {
-        thisBoid.acceleration[coordIdx] += SPEED_MAINTENANCE_WEIGHT * speedDiff * (thisBoid.velocity[coordIdx] / speed); // why last term?
+        thisBoid.acceleration[coordIdx] += SPEED_MAINTENANCE_WEIGHT * speedDiff * (thisBoid.velocity[coordIdx] / velocityMag);
       }
     }
+
+    // check if we are within the threshold of a boundary and update acceleration to steer away
+    for (coordIdx = 0; coordIdx < NUM_DIM; coordIdx++)
+    {
+      distToMax = WORLD_MAX - thisBoid.position[coordIdx];
+      distToMin = thisBoid.position[coordIdx] - WORLD_MIN;
+      // if we are not far enough away from the maximum or minimum
+      if (distToMax < BOUNDARY_PROXIMITY_THRESHOLD)
+      {
+        thisBoid.acceleration[coordIdx] -= BOUNDARY_WEIGHT * 
+        (BOUNDARY_PROXIMITY_THRESHOLD - distToMax) / BOUNDARY_PROXIMITY_THRESHOLD;
+      }
+      else if (distToMin < BOUNDARY_PROXIMITY_THRESHOLD)
+      {
+        thisBoid.acceleration[coordIdx] += BOUNDARY_WEIGHT * 
+        (BOUNDARY_PROXIMITY_THRESHOLD - distToMin) / BOUNDARY_PROXIMITY_THRESHOLD;
+      }
+    }
+
     // set to max acceleration if they are rocketing
     accelMag = vecMagnitude(thisBoid.acceleration, NUM_DIM);
     if (accelMag > MAX_ACCELERATION) 
@@ -209,7 +236,7 @@ void advanceBoids(float delT)
       vectorScalar(thisBoid.acceleration, MAX_ACCELERATION / accelMag, NUM_DIM);
     }
 
-    // update velocities                                     Replace this with a call to one of our vector Fs.
+    // NOW update velocities                                                                Replace this with a call to one of our vector Fs??? true for all little loops?
     // delT is set to 1/60. so every call to advance is like 1/60th a second to create a smooth picture of the simulation.
     // otherwise, each call is like 1 second, or delT = 1, and that'll look like shit partner
     for (coordIdx = 0; coordIdx < NUM_DIM; coordIdx++)
@@ -218,25 +245,14 @@ void advanceBoids(float delT)
     }
     
     // check speed after update, set to max speed if too speedy
-    speed = vecMagnitude(thisBoid.velocity, NUM_DIM);
-    if (speed > MAX_SPEED) vectorScalar(thisBoid.velocity, MAX_SPEED / speed, NUM_DIM);
-    
+    velocityMag = vecMagnitude(thisBoid.velocity, NUM_DIM);
+    if (velocityMag > MAX_SPEED) vectorScalar(thisBoid.velocity, MAX_SPEED / velocityMag, NUM_DIM);
+
     // update position and shared positions
     for (coordIdx = 0; coordIdx < NUM_DIM; coordIdx++)
     {
       thisBoid.position[coordIdx] += thisBoid.velocity[coordIdx] * delT;
-      
-      //                                                                    TEMPORARY BOUNDARY HANDLING
-      if (thisBoid.position[coordIdx] > WORLD_MAX)
-      {
-        thisBoid.position[coordIdx] = WORLD_MAX;
-        thisBoid.velocity[coordIdx] *= -1.0f;
-      }
-      else if (thisBoid.position[coordIdx] < WORLD_MIN)
-      {
-        thisBoid.position[coordIdx] = WORLD_MIN;
-        thisBoid.velocity[coordIdx] *= -1.0f;
-      }
+
       sharedPosIdx = (birdIdx * NUM_DIM) + coordIdx;
       boidSharedPositions[sharedPosIdx] = thisBoid.position[coordIdx];
     }
