@@ -90,37 +90,31 @@ void initializeBoids()
 }
 
 
-void updateAcceleration(Boid* thisBoid, int flockSize)
+// I don't love the side effects here, but seems to be how I write a lot of my C.
+// returns the number of birds in our visual radius, also calculates the 
+// average position, seperation and velocity of the birds around us and writes to v1,2,3.
+int steerBasedOnNeighbors(Boid* me, float* avgPos, float* avgSep, float* avgVel, int flockSize)
 {
-  float v1[NUM_DIM]; // Average position of all other birds
-  float v2[NUM_DIM]; // Average separation vector, steer us away from other birds
   float distToOthers[NUM_DIM];
-  float v3[NUM_DIM]; // Average velocity of flock
-  float accelMag, distMag;
+  float distMag = 0.0f;
   int neighborCnt = 0;
 
-  // Set all vectos to 0 initially
-  zeroVec(v1, NUM_DIM);
-  zeroVec(v2, NUM_DIM);
-  zeroVec(v3, NUM_DIM);
-
-  // extract into function?
   for (int bI = 0; bI < flockSize; bI++) 
   {
-    Boid* currentBird = &themBoids[bI];
+    Boid* otherBird = &themBoids[bI];
     
-    if (bI != thisBoid->myIdx) 
+    if (bI != me->myIdx) 
     {
       // check if |(other position - my position)| is in my visual range
-      vectorSubtract(distToOthers, currentBird->position, thisBoid->position, NUM_DIM);
+      vectorSubtract(distToOthers, otherBird->position, me->position, NUM_DIM);
       distMag = vecMagnitude(distToOthers, NUM_DIM);
 
       // if they are, add their position to the average position of neighbors, and add their velocity to the average velocity
       if (distMag < PERCEPTION_RADIUS)
       {
         neighborCnt++;  
-        vectorAdd(v1, v1, currentBird->position, NUM_DIM);
-        vectorAdd(v3, v3, currentBird->velocity, NUM_DIM);
+        vectorAdd(avgPos, avgPos, otherBird->position, NUM_DIM);
+        vectorAdd(avgVel, avgVel, otherBird->velocity, NUM_DIM);
       }
       // only steer away from birds we are about to hit
       // that is, set distToOthers = my position - their position = a vector pointing from them to me
@@ -128,44 +122,58 @@ void updateAcceleration(Boid* thisBoid, int flockSize)
       // later we will follow this vector by adding it to our accelaration to steer away from the neighbors
       if (distMag < COLLISION_RADIUS)
       {
-        vectorSubtract(distToOthers, thisBoid->position, currentBird->position,  NUM_DIM);
-        vectorAdd(v2, v2, distToOthers, NUM_DIM);
+        vectorSubtract(distToOthers, me->position, otherBird->position,  NUM_DIM);
+        vectorAdd(avgSep, avgSep, distToOthers, NUM_DIM);
       }
     }
   }
+  return neighborCnt;
+}
+
+// ** flocksize is an arg so that we can skip dead birds when flock shrinks? might not make sense in the end
+// Heart of BOIDS simulation. This is where we calculate updates to the simulation
+void updateAcceleration(Boid* thisBoid, int flockSize)
+{
+  float v1[NUM_DIM]; float v2[NUM_DIM]; float v3[NUM_DIM];
+  float accelMag, distMag;
+  int neighborCnt;
+
+  // Set all vectos to 0 initially
+  zeroVec(v1, NUM_DIM); // Average position of all other birds
+  zeroVec(v2, NUM_DIM); // Average separation vector, steer us away from too close birds
+  zeroVec(v3, NUM_DIM); // Average velocity of flock
+
+  // returns the number of birds in our visual radius, also calculates the 
+  // average position, seperation and velocity of the birds around us and writes to v1,2,3.
+  neighborCnt = steerBasedOnNeighbors(thisBoid, v1, v2, v3, flockSize);
 
   // now actually update accelaration based on the average position and velocity of the flock
   // after some weighting, and ensuring our final vectors point where we want to go below
   if (neighborCnt > 0)
   {
-    // yields direction towards center of mass scaled by 1 / number of neighbors
-    vectorScalar(v1, 1.0f / neighborCnt, NUM_DIM);
+    vectorScalar(v1, 1.0f / neighborCnt, NUM_DIM); // scale v1 by 1 / # neighbors
     // this converts v1 into a steering direction, v1 = averagePos - myPos 
     // yields a vector pointing from me to the average, we want to follow that
     vectorSubtract(v1, v1, thisBoid->position, NUM_DIM);
-    // now we weight this vector
-    vectorScalar(v1, COHESION_WEIGHT, NUM_DIM);
+    vectorScalar(v1, COHESION_WEIGHT, NUM_DIM); // weight this, how strongly do we want to follow neighbors?
 
-    // divide sum of flock velocity by flock size (num neighbors) to get average
-    vectorScalar(v3, 1.0f / neighborCnt, NUM_DIM);
+    vectorScalar(v3, 1.0f / neighborCnt, NUM_DIM); // scale velocity of neighbors by 1 / # neighbors
     // this converts average velocity into a steering direction, a vector pointing from me to the average
     vectorSubtract(v3, v3, thisBoid->velocity, NUM_DIM);
-    // then we weight this steering vector
-    vectorScalar(v3, ALIGNMENT_WEIGHT, NUM_DIM);
+    vectorScalar(v3, ALIGNMENT_WEIGHT, NUM_DIM); // weight this, how much do we match neighbors velocity?
   }
 
-  // weight the seperation vector, currently just a sum of vectors pointing away from potential collisions
-  // outside of if statement because we are only avoiding collisions
-  vectorScalar(v2, SEPERATION_WEIGHT, NUM_DIM);
+  // sum of vectors pointing away from potential collisions, weight is how strongly we avoid crashing
+  vectorScalar(v2, SEPERATION_WEIGHT, NUM_DIM); 
 
-  // zero out our acceleration from previous steps, should end up with something close to what we had before. 
+  // zero out our acceleration from previous steps as we now have a fresh picture of our neighbors
   zeroVec(thisBoid->acceleration, NUM_DIM);
-  // now add the average position and the steer away vector to our acceleration (we move towards the average but avoid neighbors)
+  // finally our acceleration = avoidCrash + avgPos + avgVel + the average velocity of the flock (we try to match velocities)
   vectorAdd(thisBoid->acceleration, v1, v2, NUM_DIM);
-  // finally our acceleration = our acceleration 0 + the average velocity of the flock (we try to match velocities)
   vectorAdd(thisBoid->acceleration, thisBoid->acceleration, v3, NUM_DIM);
 
-  // if birds are wildin out set their acceleration to max
+  // if birds are wildin out, clamp their acceleration to max
+    
   accelMag = vecMagnitude(thisBoid->acceleration, NUM_DIM);
   if (accelMag > MAX_ACCELERATION)
   {
@@ -174,12 +182,53 @@ void updateAcceleration(Boid* thisBoid, int flockSize)
 }
 
 
+// Updates laggard birds acceleration to match a target
+void maintainSpeed(Boid* thisBoid, float velocityMag)
+{
+  float speedDiff;
 
+  if (velocityMag > NUMERICAL_TOLERANCE && velocityMag < TARGET_SPEED)
+  {
+    speedDiff = TARGET_SPEED - velocityMag; // I gotta catch up!
+    
+    // add a portion of the speed difference to the boids acceleration
+    // maintain current direction by adding the product of speed diff and the normalized velocity vector
+    // this product produces an acceleration vector pointing in the direction we were already headed.
+    for (int coordIdx = 0; coordIdx < NUM_DIM; coordIdx++)
+    {
+      thisBoid->acceleration[coordIdx] += SPEED_MAINTENANCE_WEIGHT * speedDiff * (thisBoid->velocity[coordIdx] / velocityMag);
+    }
+  }
+}
+
+// updates birds acceleration to steer away from walls. I got some AI help here and need to understand these updates to acceleration more. !!!!!!!!TODO!!!!!!
+void avoidBoundaries(Boid* thisBoid)
+{
+  float distToMax, distToMin;
+  for (int coordIdx = 0; coordIdx < NUM_DIM; coordIdx++)
+  {
+    distToMax = WORLD_MAX - thisBoid->position[coordIdx];
+    distToMin = thisBoid->position[coordIdx] - WORLD_MIN;
+
+    if (distToMax < BOUNDARY_PROXIMITY_THRESHOLD)
+    {
+      thisBoid->acceleration[coordIdx] -= BOUNDARY_WEIGHT * 
+      (BOUNDARY_PROXIMITY_THRESHOLD - distToMax) / BOUNDARY_PROXIMITY_THRESHOLD;
+    }
+    else if (distToMin < BOUNDARY_PROXIMITY_THRESHOLD)
+    {
+      thisBoid->acceleration[coordIdx] += BOUNDARY_WEIGHT * 
+      (BOUNDARY_PROXIMITY_THRESHOLD - distToMin) / BOUNDARY_PROXIMITY_THRESHOLD;
+    }
+  }
+}
+
+// What WebGl context calls, updates our simulation internally, then updates shared memory
 EMSCRIPTEN_KEEPALIVE
 void advanceBoids(float delT)
 {
   int birdIdx, coordIdx, sharedPosIdx;
-  float velocityMag, speedDiff, accelMag, distToMax, distToMin;
+  float velocityMag, speedDiff, accelMag;
   Boid thisBoid;
 
   // calculate every birds acceleration
@@ -194,42 +243,14 @@ void advanceBoids(float delT)
   for (birdIdx = 0; birdIdx < NUM_BOIDS; birdIdx++)
   {
     thisBoid = themBoids[birdIdx];
-    
-    // check if too slow
+
     velocityMag = vecMagnitude(thisBoid.velocity, NUM_DIM);
-    if (velocityMag > NUMERICAL_TOLERANCE && velocityMag < TARGET_SPEED)
-    {
-      speedDiff = TARGET_SPEED - velocityMag; // I gotta catch up!
-      
-      //                                                    Replace this with a call to one of our vector Fs.
-      // add a portion of the speed difference to the boids acceleration
-      // maintain current direction by adding the product of speed diff and the normalized velocity vector
-      // this product produces an acceleration vector pointing in the direction we were already headed.
-      for (coordIdx = 0; coordIdx < NUM_DIM; coordIdx++)
-      {
-        thisBoid.acceleration[coordIdx] += SPEED_MAINTENANCE_WEIGHT * speedDiff * (thisBoid.velocity[coordIdx] / velocityMag);
-      }
-    }
+    maintainSpeed(&thisBoid, velocityMag); // accelerates birds who are lagging
 
     // check if we are within the threshold of a boundary and update acceleration to steer away
-    for (coordIdx = 0; coordIdx < NUM_DIM; coordIdx++)
-    {
-      distToMax = WORLD_MAX - thisBoid.position[coordIdx];
-      distToMin = thisBoid.position[coordIdx] - WORLD_MIN;
-      // if we are not far enough away from the maximum or minimum
-      if (distToMax < BOUNDARY_PROXIMITY_THRESHOLD)
-      {
-        thisBoid.acceleration[coordIdx] -= BOUNDARY_WEIGHT * 
-        (BOUNDARY_PROXIMITY_THRESHOLD - distToMax) / BOUNDARY_PROXIMITY_THRESHOLD;
-      }
-      else if (distToMin < BOUNDARY_PROXIMITY_THRESHOLD)
-      {
-        thisBoid.acceleration[coordIdx] += BOUNDARY_WEIGHT * 
-        (BOUNDARY_PROXIMITY_THRESHOLD - distToMin) / BOUNDARY_PROXIMITY_THRESHOLD;
-      }
-    }
+    avoidBoundaries(&thisBoid);
 
-    // set to max acceleration if they are rocketing
+    // after these updates to acceleration, clamp acceleration to max if they are rocketing
     accelMag = vecMagnitude(thisBoid.acceleration, NUM_DIM);
     if (accelMag > MAX_ACCELERATION) 
     {
@@ -259,6 +280,14 @@ void advanceBoids(float delT)
   }
 }
 
+
+
+
+
+
+
+
+/* Functions that will never change that WebGl context needs exposed. */
 EMSCRIPTEN_KEEPALIVE
 float* getBoidPositions()
 {
