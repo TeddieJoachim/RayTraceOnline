@@ -55,7 +55,12 @@ function runGame(Module) {
       accumulator -= delTime;
     }
 
-    
+    // why the fuck is our simulation spitting out this bullshit
+    for (let i = 0; i < numPositions; i++){
+      if (sharedHeapCoords[i] > 1.0) {
+        console.log("fuck ", sharedHeapCoords[i]);
+      }
+    }
     // render using sharedHeapCoords (this is a pointer, not a copy!)
     renderer.render(sharedHeapCoords, numBoids);
 

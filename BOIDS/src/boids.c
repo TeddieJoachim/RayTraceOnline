@@ -135,7 +135,7 @@ int steerBasedOnNeighbors(Boid* me, float* avgPos, float* avgSep, float* avgVel,
 void updateAcceleration(Boid* thisBoid, int flockSize)
 {
   float v1[NUM_DIM]; float v2[NUM_DIM]; float v3[NUM_DIM];
-  float accelMag, distMag;
+  float accelMag;
   int neighborCnt;
 
   // Set all vectos to 0 initially
@@ -228,7 +228,7 @@ EMSCRIPTEN_KEEPALIVE
 void advanceBoids(float delT)
 {
   int birdIdx, coordIdx, sharedPosIdx;
-  float velocityMag, speedDiff, accelMag;
+  float velocityMag, accelMag;
   Boid thisBoid;
 
   // calculate every birds acceleration
