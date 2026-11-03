@@ -223,6 +223,22 @@ void avoidBoundaries(Boid* thisBoid)
   }
 }
 
+void clampAtBoundaries(Boid* thisBoid, int coordIdx)
+{
+  if (thisBoid->position[coordIdx] > WORLD_MAX)
+  {
+    thisBoid->position[coordIdx] = WORLD_MAX;
+
+    if (thisBoid->velocity[coordIdx] > 0.0f) thisBoid->velocity[coordIdx] = 0.0f;
+  }
+  else if (thisBoid->position[coordIdx] < WORLD_MIN)
+  {
+    thisBoid->position[coordIdx] = WORLD_MIN;
+
+    if (thisBoid->velocity[coordIdx] < 0.0f) thisBoid->velocity[coordIdx] = 0.0f;
+  }
+}
+
 // What WebGl context calls, updates our simulation internally, then updates shared memory
 EMSCRIPTEN_KEEPALIVE
 void advanceBoids(float delT)
@@ -273,7 +289,7 @@ void advanceBoids(float delT)
     for (coordIdx = 0; coordIdx < NUM_DIM; coordIdx++)
     {
       thisBoid.position[coordIdx] += thisBoid.velocity[coordIdx] * delT;
-
+      clampAtBoundaries(&thisBoid, coordIdx);
       sharedPosIdx = (birdIdx * NUM_DIM) + coordIdx;
       boidSharedPositions[sharedPosIdx] = thisBoid.position[coordIdx];
     }

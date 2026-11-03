@@ -58,6 +58,7 @@ function runGame(Module) {
     // why the fuck is our simulation spitting out this bullshit
     for (let i = 0; i < numPositions; i++){
       if (sharedHeapCoords[i] > 1.0) {
+        if (i > 0 && i % 3 == 0) console.log("Z coord out of bounds");
         console.log("fuck ", sharedHeapCoords[i]);
       }
     }
