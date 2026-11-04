@@ -10,15 +10,18 @@ if (!gl) {
   console.error("Ruh roh couldn't load webgl2");
 }
 
+let simulationRunning = true;
+
 // async needed so that javascript doesn't just mosey along and do other shit
 async function startGame() {
   Module = await createWASMModule(); // Locks things up until we get our WASM
+
+  if (!simulationRunning) return; // if user clicks stop before wasm loads
+
   // if we want javascript/webgl to control the number of boids, do it here 
   Module._initializeBoids();
 
   runGame(Module);
-
-  //Module._freeBoids();                                                                  FREE THEM BOIDS WHEN YOU'RE DONE
 }
 
 
@@ -33,11 +36,12 @@ function runGame(Module) {
   const sharedHeapCoords = new Float32Array(Module.HEAPU8.buffer, Module._getBoidPositions(), numPositions);
 
   const delTime = 1.0/60.0; 
-  let prevTime = 0;
+  let prevTime = null;
   let accumulator = 0.0;
 
   // currTime is supplied by requestAnimationFrame
   function gameLoop(currTime) {
+    if (!simulationRunning) return;
     if (prevTime == null) prevTime = currTime; // don't panic and update the simulation a bunch on first iteration
     const elapsedTime = (currTime - prevTime) / 1000.0;
     prevTime = currTime;
@@ -55,20 +59,24 @@ function runGame(Module) {
       accumulator -= delTime;
     }
 
-    // why the fuck is our simulation spitting out this bullshit
-    for (let i = 0; i < numPositions; i++){
-      if (sharedHeapCoords[i] > 1.0) {
-        console.log("fuck ", sharedHeapCoords[i]);
-      }
-    }
     // render using sharedHeapCoords (this is a pointer, not a copy!)
-    renderer.render(sharedHeapCoords, numBoids);
-
+    renderer.render(sharedHeapCoords, numBoids, boidDim);
+  
     // next frame
     requestAnimationFrame(gameLoop);
   }
 
   requestAnimationFrame(gameLoop);
 }
+
+function endSimulationAndCleanup() {
+  if (!simulationRunning) return;
+
+  simulationRunning = false;
+
+  Module._freeBoids();
+}
+document.getElementById("stopButton").addEventListener("click", endSimulationAndCleanup);
+
 
 startGame(); 
