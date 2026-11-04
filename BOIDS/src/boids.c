@@ -172,8 +172,7 @@ void updateAcceleration(Boid* thisBoid, int flockSize)
   vectorAdd(thisBoid->acceleration, v1, v2, NUM_DIM);
   vectorAdd(thisBoid->acceleration, thisBoid->acceleration, v3, NUM_DIM);
 
-  // if birds are wildin out, clamp their acceleration to max
-    
+  // if birds are wildin out, clamp their acceleration to max by normalizing and then scaling to max
   accelMag = vecMagnitude(thisBoid->acceleration, NUM_DIM);
   if (accelMag > MAX_ACCELERATION)
   {
@@ -210,32 +209,40 @@ void avoidBoundaries(Boid* thisBoid)
     distToMax = WORLD_MAX - thisBoid->position[coordIdx];
     distToMin = thisBoid->position[coordIdx] - WORLD_MIN;
 
+    // if we are within a threshold (about to hit wall) decelerate in that direction proportionally to how close we are
+    // so the larger distToMax is, the smaller the steering force. (THRESHOLD - distToMax) = how far we are into the threshold
+    // we then divide how far we've encroached by the threshold to get a value between 0 and 1 
+    // (if we are 0.5 into the boundary, we get 1.0, if 0.25 we get 0.5, makes it easy to tune with boundary weight)
     if (distToMax < BOUNDARY_PROXIMITY_THRESHOLD)
     {
-      thisBoid->acceleration[coordIdx] -= BOUNDARY_WEIGHT * 
-      (BOUNDARY_PROXIMITY_THRESHOLD - distToMax) / BOUNDARY_PROXIMITY_THRESHOLD;
+      thisBoid->acceleration[coordIdx] -= BOUNDARY_WEIGHT * (BOUNDARY_PROXIMITY_THRESHOLD - distToMax) / BOUNDARY_PROXIMITY_THRESHOLD;
     }
     else if (distToMin < BOUNDARY_PROXIMITY_THRESHOLD)
     {
-      thisBoid->acceleration[coordIdx] += BOUNDARY_WEIGHT * 
-      (BOUNDARY_PROXIMITY_THRESHOLD - distToMin) / BOUNDARY_PROXIMITY_THRESHOLD;
+      thisBoid->acceleration[coordIdx] += BOUNDARY_WEIGHT * (BOUNDARY_PROXIMITY_THRESHOLD - distToMin) / BOUNDARY_PROXIMITY_THRESHOLD;
     }
   }
 }
 
+// Don't let birds leave boundaries. If hit, set to boundary and ensure they aren't travelling out by zeroing that coordIdx
 void clampAtBoundaries(Boid* thisBoid, int coordIdx)
 {
   if (thisBoid->position[coordIdx] > WORLD_MAX)
   {
     thisBoid->position[coordIdx] = WORLD_MAX;
-
-    if (thisBoid->velocity[coordIdx] > 0.0f) thisBoid->velocity[coordIdx] = 0.0f;
+    if (thisBoid->velocity[coordIdx] > 0.0f) 
+    {
+      thisBoid->velocity[coordIdx] = 0.0f;
+    }
   }
   else if (thisBoid->position[coordIdx] < WORLD_MIN)
   {
     thisBoid->position[coordIdx] = WORLD_MIN;
 
-    if (thisBoid->velocity[coordIdx] < 0.0f) thisBoid->velocity[coordIdx] = 0.0f;
+    if (thisBoid->velocity[coordIdx] < 0.0f) 
+    {
+      thisBoid->velocity[coordIdx] = 0.0f;
+    }
   }
 }
 
@@ -266,14 +273,13 @@ void advanceBoids(float delT)
     // check if we are within the threshold of a boundary and update acceleration to steer away
     avoidBoundaries(&thisBoid);
 
-    // after these updates to acceleration, clamp acceleration to max if they are rocketing
+    // after these updates to acceleration, clamp |acceleration| to max if they are rocketing
     accelMag = vecMagnitude(thisBoid.acceleration, NUM_DIM);
     if (accelMag > MAX_ACCELERATION) 
     {
       vectorScalar(thisBoid.acceleration, MAX_ACCELERATION / accelMag, NUM_DIM);
     }
 
-    // NOW update velocities                                                                Replace this with a call to one of our vector Fs??? true for all little loops?
     // delT is set to 1/60. so every call to advance is like 1/60th a second to create a smooth picture of the simulation.
     // otherwise, each call is like 1 second, or delT = 1, and that'll look like shit partner
     for (coordIdx = 0; coordIdx < NUM_DIM; coordIdx++)
