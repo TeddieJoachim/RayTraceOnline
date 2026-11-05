@@ -200,7 +200,7 @@ void maintainSpeed(Boid* thisBoid, float velocityMag)
   }
 }
 
-// updates birds acceleration to steer away from walls. I got some AI help here and need to understand these updates to acceleration more. !!!!!!!!TODO!!!!!!
+// decrements acceleration in direction of walls when applicable
 void avoidBoundaries(Boid* thisBoid)
 {
   float distToMax, distToMin;
