@@ -122,7 +122,8 @@ Cube cube;
 void initScene(float time) {
     float a = time * 0.5;
     sphere = Sphere(vec3(cos(a) * 2.5, sin(a * 1.3) * 0.8, -6.0 + sin(a) * 0.5), 1.0, vec3(1.0, 0.3, 0.3));
-
+    // add glass sphere
+    glassSphere = Sphere(vec3(-2.0, 0.0, -6.0), 0.8, vec3(0.95, 0.98, 1.0));
     float b = time * 0.3;
     cube = Cube(vec3(sin(b) * 2.0, cos(b * 1.5) + 0.5, -9.0 + cos(b * 0.7)), 0.8, vec3(0.3, 0.8, 0.3), 0.85);
 }
@@ -159,7 +160,7 @@ bool intersectCube(Ray ray, out float t, out vec3 normal) {
     return true;
 }
 
-eta = n1 / n2
+//eta = n1 / n2
 vec3 refraction(vec3 I, vec3 N, float eta) {
   float cosTheta = min(dot(-I, N), 1.0);
   vec3 perp = eta * (I + cosTheta * N);
@@ -167,16 +168,16 @@ vec3 refraction(vec3 I, vec3 N, float eta) {
 
   // if length of parallel component is negative refraction not possible
   if (parLen < 0.0) return vec3(0.0); 
-  vec3 parallel = -sqrt(parallelLength) * N;
+  vec3 parallel = -sqrt(parLen) * N;
 
-  return perpendicular + parallel;
+  return perp + parallel;
 }
 
 // Schlick approximation
 float schlick(float cosine, float ref_idx) {
   // reflectivity when looking at surface, find how far deviates from perpendicular and raise to fifth power
   float r0 = (1.0 - ref_idx) / (1.0 + ref_idx);
-  
+
   r0 = r0 * r0;
 
   return r0 + (1.0 - r0) * pow(1.0 - cosine, 5.0);
@@ -210,6 +211,12 @@ HitData traceScene(Ray ray, bool includeLight) {
         hit = HitData(true, t, ray.origin + ray.direction * t, n, cube.color, cube.reflectivity, false, false);
     }
 
+    // check for hit on glass sphere. final true -> glass handling
+    if (intersectSphere(ray, glassSphere, t) && t < hit.t) {
+      vec3 p = ray.origin + ray.direction * t;
+      hit = HitData(true, t, p, (p - glassSphere.center) / glassSphere.radius, glassSphere.color, 0.0, false, true);
+    }
+
     if (intersectSphere(ray, sphere, t) && t < hit.t) {
         vec3 p = ray.origin + ray.direction * t;
         hit = HitData(true, t, p, (p - sphere.center) / sphere.radius, sphere.color, 0.0, false, false);
@@ -240,23 +247,32 @@ vec3 trace(Ray ray) {
         // Refraction: (option 1)either reflects or refracts the ray, whichever Schlick says is stronger
         // (option 2): finalColor = hit.color * (F * reflectionColor + (1.0 - F) * refractionColor)
         // (option 3): Monte Carlo Sampling (multiple rays per pixel), reflect with probability F (random() < schlick_value), else refract, and average many samples per pixel
-        //<!-- if (hit.isGlass) {
-        //    <!-- insert your code here -->
+        if (hit.isGlass) {
+          // determine if ray is entering by dotting surface normal and incoming ray. 
+          // when entering, 1/1.5, when exiting, 1.5/1, flip normal if exiting to point away form ray.
+          vec3 normal = hit.normal;
+          bool enters = dot(ray.direction, normal) < 0.0;
+          if (!enters) normal = -normal;
+          float eta = enters ? (1.0 / GLASS_IOR) : GLASS_IOR;
 
-        //    vec3 direction;
-        //    if (total_internal_reflection || schlick_value > 0.5) {
-                //direction = reflection ray
-        //        <!-- insert your code here -->
-        //    } else {
-                //direction = refraction ray
-        //        <!-- insert your code here -->
-        //    }
+          // then calculate the refraction and reflectance
+          float cosine = clamp(dot(-ray.direction, normal), 0.0, 1.0);
+          vec3 refracted = refraction(ray.direction, normal, eta);
+          float schlickValue = schlick(cosine, eta);
+          bool totalInternalReflection = dot(refracted, refracted) < 0.0001;
 
-        //    ray = Ray(hit.point + direction * 0.001, direction);
-        ////Use Schlick approximation to determine contributions from reflection and refraction
-        //    attenuation *= hit.color;
-        //    continue;
-        //}
+          vec3 direction;
+          if (totalInternalReflection || schlickValue > 0.5) {
+              direction = reflect(ray.direction, normal);
+          } else {
+              direction = refracted;
+          }
+
+          ray = Ray(hit.point + direction * 0.001, direction);
+      ////Use Schlick approximation to determine contributions from reflection and refraction
+          attenuation *= hit.color;
+          continue;
+      }
 
         vec3 toLight = lightSphere.center - hit.point;
         float lightDist = length(toLight);
