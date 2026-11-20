@@ -115,6 +115,7 @@ struct HitData {
 };
 
 const Sphere lightSphere = Sphere(vec3(4.0, 3.0, -4.0), 0.3, vec3(1.0, 1.0, 0.9));
+const Sphere secondLightSphere = Sphere(vec3(-4.0, 3.0, -6.0), 0.3, vec3(0.7, 0.8, 1.0));
 Sphere sphere;
 Sphere glassSphere;
 Cube cube;
@@ -200,6 +201,11 @@ HitData traceScene(Ray ray, bool includeLight) {
         hit = HitData(true, t, ray.origin + ray.direction * t, vec3(0.0), lightSphere.color, 0.0, true, false);
     }
 
+    // add check for second light source
+    if (includeLight && intersectSphere(ray, secondLightSphere, t) && t < hit.t) {
+      hit = HitData(true, t, ray.origin + ray.direction * t, vec3(0.0), secondLightSphere.color, 0.0, true, false);
+  }
+
     if (intersectFloor(ray, t) && t < hit.t) {
         vec3 p = ray.origin + ray.direction * t;
         vec2 cell = floor(p.xz / CHECKER_SIZE);
@@ -225,6 +231,29 @@ HitData traceScene(Ray ray, bool includeLight) {
     return hit;
 }
 
+// helper to calculate a given sources contribution
+vec3 calculateLighting(HitData hit, Sphere light) {
+    vec3 toLight = light.center - hit.point;
+    float lightDist = length(toLight);
+    vec3 lightDir = toLight / lightDist;
+
+    // Cast shadow ray toward this light
+    HitData blocker = traceScene(
+        Ray(hit.point + hit.normal * 0.001, lightDir),
+        false
+    );
+
+    float visible = blocker.hit && blocker.t < lightDist ? 0.0 : 1.0;
+
+    // Diffuse lighting
+    float diff = max(dot(hit.normal, lightDir), 0.0);
+
+    // Distance attenuation
+    float falloff = 1.0 / (1.0 + 0.1 * lightDist * lightDist);
+
+    return hit.color * light.color * LIGHT_POWER * diff * falloff * visible;
+  }
+
 vec3 trace(Ray ray) {
     vec3 color = vec3(0.0);
     vec3 attenuation = vec3(1.0);
@@ -240,7 +269,7 @@ vec3 trace(Ray ray) {
         }
 
         if (hit.isLight) {
-            color += attenuation * lightSphere.color * LIGHT_POWER;
+            color += attenuation * hit.color * LIGHT_POWER;
             break;
         }
 
@@ -274,17 +303,13 @@ vec3 trace(Ray ray) {
           continue;
       }
 
-        vec3 toLight = lightSphere.center - hit.point;
-        float lightDist = length(toLight);
-        vec3 lightDir = toLight / lightDist;
+        // Calculate contribution from both lights
+        vec3 lighting1 = calculateLighting(hit, lightSphere);
+        vec3 lighting2 = calculateLighting(hit, secondLightSphere);
 
-        HitData blocker = traceScene(Ray(hit.point + hit.normal * 0.001, lightDir), false);
-        float visible = blocker.hit && blocker.t < lightDist ? 0.0 : 1.0;
-        float diff = max(dot(hit.normal, lightDir), 0.0);
-        float falloff = 1.0 / (1.0 + 0.1 * lightDist * lightDist);
-
-        //  (optional) Ambient fill light approximates indirect light we don't trace.
-        vec3 shading = hit.color * (LIGHT_POWER * diff * falloff * visible + u_ambientStrength);
+        // Ambient illumination is only added once
+        vec3 ambient = hit.color * u_ambientStrength;
+        vec3 shading = lighting1 + lighting2 + ambient;
         color += attenuation * shading * (1.0 - hit.reflectivity);
 
         if (hit.reflectivity == 0.0) break;
